@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Henry's Fork Plaza Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        [v-cloak] { display: none; }
+
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            overflow-x: hidden !important;
+        }
+        #app {
+            width: 100vw !important;
+            position: relative;
+            min-height: 100vh;
+        }
+        .tab-active { border-left: 4px solid #2563eb; background: #f8fafc; color: #1e40af; font-weight: 700; }
+        .reply-node { border-left: 2px solid #e2e8f0; margin-left: 0.5rem; padding-left: 1rem; }
+        .reply-node-nested { margin-left: 1.5rem; }
+        .btn-shadow { box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
+
+        .drawer-enter-active, .drawer-leave-active { transition: transform 0.3s ease; }
+        .drawer-enter-from, .drawer-leave-to { transform: translateX(100%); }
+        @media (max-width: 768px) {
+            .mobile-nav-item {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.65rem;
+                padding: 0.6rem 0;
+            }
+            .mobile-nav-item i { font-size: 1.2rem; margin-bottom: 0.2rem; }
+            .content-area { padding-bottom: 7rem; }
+        }
+        .logo-glow {
+            filter: drop-shadow(0 0 15px rgba(37, 99, 235, 0.12));
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen m-0 p-0 font-sans">
+<div id="app" v-cloak class="overflow-x-hidden">
+    <!-- 1. Authentication Screen -->
+    <div v-if="!user" class="min-h-screen flex items-center justify-center p-4 bg-slate-100">
+        <div class="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 md:p-10 border border-slate-200">
+            <div class="text-center mb-8">
+                <!-- Larger Logo for Login -->
+                <img :src="logoUrl" alt="Henry's Fork Plaza Logo" class="h-48 w-auto mx-auto mb-6 logo-glow object-contain">
+                <h1 class="text-xl font-bold text-slate-800 tracking-tight">Member Portal</h1>
+                <p class="text-slate-500 text-sm mt-1">Manage your business account</p>
+            </div>
+            <form v-if="authMode === 'login'" @submit.prevent="login">
+                <div class="mb-4">
+                    <label class="block text-xs font-bold uppercase tracking-wide mb-1.5 text-slate-500">Email Address</label>
+                    <input v-model="authForm.email" type="email" class="w-full p-3.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="your@email.com" required>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-bold uppercase tracking-wide mb-1.5 text-slate-500">Password</label>
+                    <input v-model="authForm.password" type="password" class="w-full p-3.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Your password" required>
+                </div>
+                <button type="submit" :disabled="loading" class="w-full bg-blue-600 text-white py-3.5 rounded-xl hover:bg-blue-700 transition font-bold text-sm btn-shadow">
+                    <span v-if="loading"><i class="fas fa-spinner fa-spin"></i> Authenticating...</span>
+                    <span v-else>Sign In</span>
+                </button>
+                <p class="mt-8 text-center text-sm text-slate-500 font-medium">
+                    New member? <button type="button" @click="authMode = 'signup'" class="text-blue-600 font-bold hover:underline">Request account access</button>
+                </p>
+            </form>
+            <form v-else @submit.prevent="handleSignup">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wide mb-1.5 text-slate-500">Full Name</label>
+                        <input v-model="authForm.name" type="text" class="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="First & Last Name" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wide mb-1.5 text-slate-500">Business Name</label>
+                        <input v-model="authForm.business" type="text" class="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Legal Entity Name" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wide mb-1.5 text-slate-500">Email Address</label>
+                        <input v-model="authForm.email" type="email" class="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="work@email.com" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wide mb-1.5 text-slate-500">Create Password</label>
+                        <input v-model="authForm.password" type="password" class="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" required minlength="6">
+                    </div>
+                </div>
+                <button type="submit" :disabled="loading" class="w-full bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 transition font-bold mt-6 btn-shadow">
+                    <span v-if="loading"><i class="fas fa-spinner fa-spin"></i> Processing...</span>
+                    <span v-else>Submit Registration</span>
+                </button>
+                <p class="mt-8 text-center text-sm text-slate-500 font-medium">
+                    Return to <button type="button" @click="authMode = 'login'" class="text-blue-600 font-bold hover:underline">Sign In</button>
+                </p>
+            </form>
+            <p v-if="error" class="mt-4 text-red-600 text-sm text-center font-bold bg-red-50 p-3 rounded-xl border border-red-100">{{ error }}</p>
+        </div>
+    </div>
+    <!-- 2. Pending Approval Screen -->
+    <div v-else-if="userProfile && !userProfile.isApproved" class="min-h-screen flex items-center justify-center p-6 bg-slate-50 text-center text-slate-900">
+        <div class="max-w-md bg-white p-10 rounded-3xl shadow-xl border border-slate-200">
+            <img :src="logoUrl" alt="Henry's Fork Plaza Logo" class="h-40 w-auto mx-auto mb-8 logo-glow grayscale opacity-50 object-contain">
+            <div class="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl"><i class="fas fa-clock"></i></div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-3 tracking-tight">Pending Approval</h2>
+            <p class="text-slate-500 mb-8 text-sm leading-relaxed font-medium">Hello {{ userProfile.name }}, your account for <strong>{{ userProfile.businessName }}</strong> is currently awaiting administrator review.</p>
+            <button @click="logout" class="text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-red-500 transition">Sign out and refresh later</button>
+        </div>
+    </div>
+    <!-- 3. Main Dashboard UI -->
+    <div v-else class="flex flex-col md:flex-row min-h-screen w-full">
+        <!-- Desktop Sidebar -->
+        <aside class="hidden md:flex w-72 bg-white border-r border-slate-200 p-6 flex flex-col sticky top-0 h-screen shrink-0 shadow-sm">
+            <div class="mb-10 px-2 text-center">
+                <!-- Large Sidebar Logo -->
+                <img :src="logoUrl" alt="Henry's Fork Plaza" class="h-32 w-auto object-contain mx-auto mb-4">
+                <div class="text-[11px] text-slate-400 font-bold tracking-widest uppercase ml-1">Rexburg, Idaho</div>
+            </div>
+            <nav class="space-y-1 flex-1">
+                <button v-for="link in navLinks" :key="link.view" @click="view = link.view" :class="navBtnClass(link.view)">
+                    <i :class="link.icon + ' w-6 text-center'"></i> <span>{{ link.label }}</span>
+                </button>
+                <button v-if="isAdmin" @click="view = 'admin'" :class="navBtnClass('admin')">
+                    <i class="fas fa-user-shield w-6 text-center text-amber-500"></i> <span>Admin Control</span>
+                </button>
+            </nav>
+            <div class="pt-8 border-t border-slate-100">
+                <div class="text-xs text-slate-400 mb-2 truncate px-2 font-medium">{{ user.email }}</div>
+                <button @click="logout" class="text-sm text-slate-600 hover:text-red-500 w-full text-left p-2 rounded transition flex items-center gap-2">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </aside>
+        <!-- Mobile Top Bar with Logo and Hamburger (Top Right) -->
+        <div class="md:hidden sticky top-0 bg-white border-b border-slate-200 p-4 flex justify-between items-center z-30 shadow-sm">
+            <img :src="logoUrl" alt="Henry's Fork Plaza" class="h-16 w-auto object-contain">
+            <button @click="isDrawerOpen = true" class="text-slate-500 p-2 focus:outline-none">
+                <i class="fas fa-bars text-2xl"></i>
+            </button>
+        </div>
+        <!-- Mobile Bottom Nav - Core Utilities -->
+        <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around z-40 pb-safe shadow-lg py-1 px-2">
+            <button @click="view = 'home'" :class="mobileNavClass('home')"><i class="fas fa-home"></i><span>Home</span></button>
+            <button @click="view = 'discussions'" :class="mobileNavClass('discussions')"><i class="fas fa-comments"></i><span>Chat</span></button>
+            <button @click="view = 'billing'" :class="mobileNavClass('billing')"><i class="fas fa-wallet"></i><span>Pay</span></button>
+            <button @click="view = 'resources'" :class="mobileNavClass('resources')"><i class="fas fa-folder-open"></i><span>Docs</span></button>
+        </nav>
+        <!-- Mobile Side Drawer -->
+        <div v-if="isDrawerOpen" @click="isDrawerOpen = false" class="md:hidden fixed inset-0 bg-slate-900/60 z-50 backdrop-blur-sm transition-opacity"></div>
+        <transition name="drawer">
+            <div v-if="isDrawerOpen" class="md:hidden fixed top-0 right-0 w-4/5 h-full bg-white z-[60] shadow-2xl p-8 flex flex-col">
+                <div class="flex justify-between items-center mb-8">
+                    <img :src="logoUrl" alt="Logo" class="h-16 w-auto object-contain">
+                    <button @click="isDrawerOpen = false" class="text-slate-400 text-3xl">&times;</button>
+                </div>
+                <div class="space-y-4 flex-1 overflow-y-auto">
+                    <!-- Drawer Links -->
+                    <button @click="view = 'home'; isDrawerOpen = false" class="w-full text-left p-4 rounded-xl flex items-center gap-4 transition font-bold" :class="view === 'home' ? 'bg-blue-50 text-blue-600' : 'text-slate-500'">
+                        <i class="fas fa-home w-6 text-center text-lg"></i> Dashboard
+                    </button>
+                    <button @click="view = 'polls'; isDrawerOpen = false" class="w-full text-left p-4 rounded-xl flex items-center gap-4 transition font-bold" :class="view === 'polls' ? 'bg-blue-50 text-blue-600' : 'text-slate-500'">
+                        <i class="fas fa-check-to-slot w-6 text-center text-lg"></i> Member Polls
+                    </button>
+                    <!-- Admin Link in Drawer -->
+                    <button v-if="isAdmin" @click="view = 'admin'; isDrawerOpen = false" class="w-full text-left p-4 rounded-xl flex items-center gap-4 transition font-bold border-t border-slate-50 pt-6" :class="view === 'admin' ? 'bg-amber-50 text-amber-600' : 'text-slate-500'">
+                        <i class="fas fa-user-shield w-6 text-center text-lg text-amber-500"></i> Admin tools
+                    </button>
+                </div>
+                <div class="pt-8 border-t border-slate-100">
+                    <div class="text-[10px] text-slate-400 font-bold uppercase mb-4 px-2">{{ user.email }}</div>
+                    <button @click="logout" class="w-full text-left p-4 rounded-xl flex items-center gap-4 text-red-500 font-bold">
+                        <i class="fas fa-sign-out-alt w-6 text-center text-lg"></i> Sign Out
+                    </button>
+                </div>
+            </div>
+        </transition>
+        <!-- Main Content Area -->
+        <main class="flex-1 p-5 md:p-10 content-area min-w-0 overflow-y-auto bg-slate-50">
+
+            <!-- HOME VIEW -->
+            <div v-if="view === 'home'" class="max-w-5xl mx-auto">
+                <div class="mb-10 text-center md:text-left">
+                    <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-2 tracking-tight">Welcome, {{ userProfile?.name?.split(' ')[0] || 'Member' }}</h1>
+                    <p class="text-slate-500 text-lg font-medium">Henry's Fork Plaza business member resources.</p>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+                    <div class="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm col-span-1 lg:col-span-2">
+                        <h2 class="font-bold text-xl text-slate-800 mb-4">Plaza Overview</h2>
+                        <p class="text-slate-600 leading-relaxed text-sm md:text-base font-medium">
+                            Henry's Fork Plaza is a commercial center located in Rexburg, Idaho. This portal serves as a centralized hub for member businesses to communicate, access documents, and manage billing accounts.
+                        </p>
+                        <div class="mt-6 flex items-center gap-3 text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-100 w-fit">
+                            <i class="fas fa-location-dot text-blue-500"></i>
+                            <span class="text-sm font-semibold text-slate-700">Henry's Fork Plaza, Rexburg, ID 83440</span>
+                        </div>
+                    </div>
+                    <div class="bg-blue-600 p-6 rounded-2xl text-white shadow-lg shadow-blue-100 flex flex-col justify-center text-center lg:text-left">
+                        <h2 class="font-bold text-lg mb-4 uppercase tracking-wider text-blue-100">Shortcuts</h2>
+                        <div class="space-y-2">
+                            <button @click="view = 'billing'" class="w-full text-left p-3.5 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center gap-3 text-sm font-bold">
+                                <i class="fas fa-credit-card w-5 text-center"></i> <span>Manage billing</span>
+                            </button>
+                            <button @click="view = 'discussions'" class="w-full text-left p-3.5 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center gap-3 text-sm font-bold">
+                                <i class="fas fa-comments w-5 text-center"></i> <span>Member discussions</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+                    <div v-for="(feature, idx) in homeFeatures" :key="idx" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <div :class="feature.iconBg" class="w-10 h-10 rounded-xl flex items-center justify-center mb-4 shadow-sm"><i :class="feature.icon"></i></div>
+                        <h3 class="font-bold text-slate-800 text-sm mb-1 uppercase tracking-tight">{{ feature.title }}</h3>
+                        <p class="text-[11px] text-slate-500 leading-normal font-medium">{{ feature.desc }}</p>
+                    </div>
+                </div>
+            </div>
+            <!-- CHAT VIEW -->
+            <div v-if="view === 'discussions'">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                    <h1 class="text-2xl font-bold">Community Chat</h1>
+                    <button @click="modals.discussion = true" class="w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 btn-shadow font-bold text-sm uppercase tracking-wide"><i class="fas fa-plus mr-2"></i> New Topic</button>
+                </div>
+                <div class="space-y-4">
+                    <div v-for="post in visibleDiscussions" :key="post.id" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-lg text-slate-800">{{ post.title }}</h3>
+                            <span v-if="!post.isApproved" class="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest shrink-0 ml-3">Pending</span>
+                        </div>
+                        <p class="text-slate-500 mb-4 text-sm md:text-base font-medium leading-relaxed">{{ post.content }}</p>
+                        <div class="flex flex-wrap items-center text-xs text-slate-400 gap-4 pt-4 border-t border-slate-50 font-bold uppercase tracking-tight">
+                            <span class="text-blue-500"><i class="fas fa-building mr-1"></i> {{ post.businessName }}</span>
+                            <span><i class="fas fa-calendar mr-1"></i> {{ formatDate(post.createdAt) }}</span>
+                            <button @click="toggleReplies(post.id)" class="text-slate-600 hover:text-blue-600 transition"><i class="fas fa-comment mr-1"></i> {{ post.replies?.length || 0 }} replies</button>
+                            <button v-if="isAdmin" @click="deletePost(post.id)" class="text-red-400 hover:text-red-500 transition ml-auto flex items-center"><i class="fas fa-trash-alt mr-1"></i> Delete</button>
+                        </div>
+                        <div v-if="activeReplies === post.id" class="mt-6 space-y-4">
+                            <div v-for="reply in getThreadedReplies(post.replies)" :key="reply.id" class="p-4 rounded-xl text-sm bg-slate-50 relative group border border-slate-100" :class="reply.parentId ? 'reply-node reply-node-nested' : 'reply-node'">
+                                <div class="flex justify-between items-start mb-1"><div class="font-bold text-blue-600 text-[11px] uppercase">{{ reply.businessName }}</div><button @click="setReplyTarget(reply)" class="text-[10px] text-slate-400 font-bold hover:text-blue-600 opacity-0 group-hover:opacity-100 transition">REPLY</button></div>
+                                <div class="text-slate-600 font-medium">{{ reply.text }}</div>
+                                <div v-if="replyingTo && replyingTo.id === reply.id" class="mt-3 flex gap-2"><input v-model="newReplyText" :placeholder="'Reply to ' + reply.businessName + '...'" class="flex-1 p-2 border border-slate-200 rounded-lg text-xs outline-none bg-white shadow-sm font-medium"><button @click="submitReply(post.id, reply.id)" class="bg-blue-600 text-white px-4 py-1 rounded-lg text-xs font-bold">SEND</button><button @click="replyingTo = null" class="text-slate-400"><i class="fas fa-times"></i></button></div>
+                            </div>
+                            <div v-if="!replyingTo" class="flex gap-2 mt-4 pt-4 border-t border-slate-100"><input v-model="newReplyText" placeholder="Post a comment..." class="flex-1 p-3 border border-slate-200 rounded-xl text-sm outline-none bg-white font-medium shadow-sm"><button @click="submitReply(post.id)" class="bg-slate-800 text-white px-5 py-2 rounded-xl text-xs font-bold hover:bg-black transition">POST</button></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- POLLS VIEW -->
+            <div v-if="view === 'polls'">
+                <div class="mb-8"><h1 class="text-2xl font-bold mb-1 text-slate-800">Member Polls</h1><p class="text-slate-500 text-sm font-medium">Plaza decision participation.</p></div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div v-for="poll in polls" :key="poll.id" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-start mb-6"><h3 class="font-bold text-lg text-slate-800 leading-tight">{{ poll.question }}</h3><button v-if="isAdmin" @click="deletePoll(poll.id)" class="text-slate-200 hover:text-red-500 transition p-2"><i class="fas fa-trash-alt"></i></button></div>
+                        <div class="space-y-3">
+                            <div v-for="(votes, option) in poll.options" :key="option">
+                                <button @click="vote(poll.id, option)" class="w-full text-left p-4 rounded-xl border border-slate-100 hover:border-blue-300 transition relative overflow-hidden group shadow-sm bg-slate-50/40" :class="hasVotedFor(poll, option) ? 'border-blue-500 ring-2 ring-blue-500/10' : ''">
+                                    <div class="relative z-10 flex justify-between items-center"><span class="flex items-center gap-2 text-sm text-slate-700 font-bold uppercase tracking-tight">{{ option }} <span v-if="hasVotedFor(poll, option)" class="text-[8px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold">VOTED</span></span><span class="font-bold text-xs text-slate-400">{{ getPollPercentage(poll, option) }}%</span></div>
+                                    <div class="absolute inset-y-0 left-0 bg-blue-50 transition-all duration-700" :style="{ width: getPollPercentage(poll, option) + '%' }"></div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button v-if="isAdmin" @click="modals.poll = true" class="mt-8 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 btn-shadow font-bold text-sm uppercase tracking-wide"><i class="fas fa-plus mr-2"></i> Create Poll</button>
+            </div>
+            <!-- RESOURCES VIEW -->
+            <div v-if="view === 'resources'">
+                <div class="mb-8"><h1 class="text-2xl font-bold mb-1 text-slate-800">Plaza Documents</h1><p class="text-slate-500 text-sm font-medium">Access official forms and guidelines.</p></div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div v-for="res in resources" :key="res.id" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all cursor-pointer flex items-center gap-4 group" @click="openLink(res.url)">
+                        <div class="w-14 h-14 bg-slate-50 rounded-xl flex items-center justify-center text-3xl shrink-0 group-hover:scale-105 transition-transform">{{ getCategoryEmoji(res.category) }}</div>
+                        <div class="min-w-0 flex-1"><div class="font-bold text-slate-800 text-sm mb-1 truncate uppercase tracking-tight">{{ res.title }}</div><div class="text-[10px] text-slate-400 font-black uppercase tracking-widest">{{ res.category }}</div></div>
+                        <button v-if="isAdmin" @click.stop="deleteResource(res.id)" class="text-slate-200 hover:text-red-500 transition p-2 shrink-0"><i class="fas fa-trash-can"></i></button>
+                    </div>
+                </div>
+                <button v-if="isAdmin" @click="modals.resource = true" class="mt-8 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 btn-shadow font-bold text-sm uppercase tracking-wide"><i class="fas fa-plus mr-2"></i> Add Document</button>
+            </div>
+            <!-- BILLING VIEW -->
+            <div v-if="view === 'billing'">
+                <h1 class="text-2xl font-bold mb-8 text-slate-800">Dues & Billing</h1>
+
+                <!-- Status Box -->
+                <div class="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 mb-10 shadow-sm max-w-2xl">
+                    <div v-if="userProfile?.subscriptionStatus === 'active'" class="flex items-center gap-6">
+                        <div class="w-16 h-16 bg-slate-100 text-green-600 rounded-2xl flex items-center justify-center text-3xl shrink-0 border border-slate-200"><i class="fas fa-check"></i></div>
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800 uppercase tracking-tight">Account Active</h3>
+                            <p class="text-sm text-slate-500 mt-1 font-medium italic">Your lot fees are currently up to date.</p>
+                        </div>
+                    </div>
+                    <div v-else class="flex items-center gap-6">
+                        <div class="w-16 h-16 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center text-3xl shrink-0 border border-blue-100"><i class="fas fa-user-gear"></i></div>
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800 uppercase tracking-tight">Billing Settings</h3>
+                            <p class="text-sm text-slate-500 mt-1 font-medium">If you already have a plan, manage it below. Otherwise, select a new plan.</p>
+                        </div>
+                    </div>
+
+                    <button @click="openStripePortal" class="mt-8 w-full sm:w-auto bg-slate-900 text-white px-6 py-4 rounded-xl hover:bg-black font-bold text-sm transition flex items-center justify-center gap-2 shadow-lg uppercase tracking-widest">
+                        Manage Settings & Invoices <i class="fas fa-external-link-alt text-[10px] opacity-50"></i>
+                    </button>
+                </div>
+                <div v-if="userProfile?.subscriptionStatus !== 'active'">
+                    <!-- Section 1: Standard Lot Membership -->
+                    <div class="mb-12">
+                        <h2 class="text-sm font-bold text-slate-400 uppercase tracking-[0.2em] mb-6 px-2">Standard Lot Membership</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+                            <div class="bg-blue-600 p-8 rounded-2xl text-white shadow-xl flex flex-col">
+                                <div class="text-[11px] font-bold text-blue-200 uppercase mb-4 tracking-widest">Monthly Standard</div>
+                                <div class="text-4xl font-bold mb-2">$200 <span class="text-sm font-normal opacity-70">/ mo</span></div>
+                                <p class="text-[11px] font-medium opacity-80 mb-8 font-bold uppercase">Standard Recurring Plan</p>
+                                <button @click="openStripeCheckout('monthly')" class="mt-auto w-full py-4 rounded-xl bg-white text-blue-600 font-bold text-sm hover:bg-blue-50 transition uppercase tracking-widest">Select Plan</button>
+                            </div>
+                            <div class="bg-slate-50 p-8 rounded-2xl border border-slate-200 flex flex-col">
+                                <div class="text-[11px] font-bold text-slate-400 uppercase mb-4 tracking-widest">Annual Standard</div>
+                                <div class="text-4xl font-bold mb-2 text-slate-800">$2,400 <span class="text-sm font-normal opacity-70">/ yr</span></div>
+                                <p class="text-[11px] font-medium opacity-80 mb-8 font-bold uppercase text-slate-400">Pre-Paid Full Year</p>
+                                <button @click="openStripeCheckout('yearly')" class="mt-auto w-full py-4 rounded-xl bg-slate-900 text-white font-bold text-sm hover:bg-black transition uppercase tracking-widest">Select Plan</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Section 2: Shared Lot Membership -->
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-400 uppercase tracking-[0.2em] mb-6 px-2">Shared Lot Membership</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+                            <div class="bg-slate-800 p-8 rounded-2xl text-white shadow-lg flex flex-col">
+                                <div class="text-[11px] font-bold text-slate-400 uppercase mb-4 tracking-widest text-slate-300">Monthly Shared</div>
+                                <div class="text-4xl font-bold mb-2">$33.33 <span class="text-sm font-normal opacity-70 text-slate-400">/ mo</span></div>
+                                <p class="text-[11px] font-medium opacity-80 mb-8 font-bold uppercase text-slate-400 italic">Recurring Shared Maintenance</p>
+                                <button @click="openStripeCheckout('monthly_shared')" class="mt-auto w-full py-4 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition uppercase tracking-widest">Select Shared Plan</button>
+                            </div>
+                            <div class="bg-white p-8 rounded-2xl border border-slate-200 flex flex-col shadow-sm">
+                                <div class="text-[11px] font-bold text-slate-400 uppercase mb-4 tracking-widest">Annual Shared</div>
+                                <div class="text-4xl font-bold mb-2 text-slate-800">$400 <span class="text-sm font-normal opacity-70">/ yr</span></div>
+                                <p class="text-[11px] font-medium text-slate-400 mb-8 font-bold uppercase italic">Full Year Shared Lot</p>
+                                <button @click="openStripeCheckout('yearly_shared')" class="mt-auto w-full py-4 rounded-xl bg-slate-100 text-slate-800 font-bold text-sm hover:bg-slate-200 transition uppercase tracking-widest">Select Shared Plan</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ADMIN VIEW -->
+            <div v-if="view === 'admin' && isAdmin">
+                <h1 class="text-2xl font-bold mb-8 uppercase tracking-tight text-slate-800">Administrative Control</h1>
+
+                <!-- Pending Account Requests -->
+                <div class="mb-10">
+                    <h2 class="font-bold text-slate-400 uppercase text-[11px] mb-4 tracking-[0.2em] border-b pb-2">Pending Account Requests</h2>
+                    <div v-if="pendingUsers.length === 0" class="text-slate-400 text-sm font-medium bg-white p-8 rounded-2xl border border-dashed border-slate-200 text-center italic">No pending member requests.</div>
+                    <div v-for="pendingUser in pendingUsers" :key="pendingUser.id" class="bg-white border border-blue-100 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3 shadow-sm">
+                        <div>
+                            <div class="font-bold text-slate-800 uppercase tracking-tight">{{ pendingUser.name }}</div>
+                            <div class="text-[10px] text-blue-600 font-bold uppercase mt-1">{{ pendingUser.businessName }}</div>
+                            <div class="text-[10px] text-slate-400 font-medium">{{ pendingUser.email }}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="approveUser(pendingUser.id)" class="bg-green-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold hover:bg-green-700 uppercase tracking-widest">Approve</button>
+                            <button @click="deleteMember(pendingUser.id)" class="bg-white text-red-500 border border-red-100 px-4 py-2 rounded-xl text-[10px] font-bold hover:bg-red-50 uppercase tracking-widest">Reject</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-10"><h2 class="font-bold text-slate-400 uppercase text-[11px] mb-4 tracking-[0.2em] border-b pb-2">Pending Content</h2><div v-if="pendingDiscussions.length === 0" class="text-slate-400 text-sm font-medium bg-white p-8 rounded-2xl border border-dashed border-slate-200 text-center italic">No posts pending review.</div><div v-for="post in pendingDiscussions" :key="post.id" class="bg-slate-100 border border-slate-200 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3 shadow-sm"><div><div class="font-bold text-slate-800 uppercase tracking-tight">{{ post.title }}</div><div class="text-[10px] text-blue-600 font-bold uppercase mt-1">Requested By: {{ post.businessName }}</div></div><div class="flex gap-2"><button @click="approvePost(post.id)" class="bg-green-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold hover:bg-green-700 uppercase tracking-widest">Approve</button><button @click="deletePost(post.id)" class="bg-white text-red-500 border border-red-100 px-4 py-2 rounded-xl text-[10px] font-bold hover:bg-red-50 uppercase tracking-widest">Reject</button></div></div></div>
+
+                <div>
+                    <h2 class="font-bold text-slate-400 uppercase text-[11px] mb-4 tracking-[0.2em] border-b pb-2">Member Directory</h2>
+                    <div class="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 tracking-widest"><tr><th class="p-5">Business Member</th><th class="p-5">Access Role</th><th class="p-5 text-center">Security Status</th><th class="p-5 text-right">Actions</th></tr></thead>
+                            <tbody class="divide-y divide-slate-100"><tr v-for="userDoc in allUsers" :key="userDoc.id" class="hover:bg-slate-50 transition"><td class="p-5"><div class="font-bold text-slate-800 text-sm">{{ userDoc.name }}</div><div class="text-[11px] text-blue-600 font-black uppercase tracking-tight">{{ userDoc.businessName }}</div><div class="text-[10px] text-slate-400 font-medium">{{ userDoc.email }}</div></td><td class="p-5"><span class="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border" :class="userDoc.role === 'admin' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-500 border-slate-200'">{{ userDoc.role }}</span></td><td class="p-5 text-center"><span v-if="userDoc.isApproved" class="text-green-600 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5"><i class="fas fa-check-circle"></i> VERIFIED</span><span v-else class="text-amber-500 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5"><i class="fas fa-hourglass-half"></i> PENDING</span></td><td class="p-5 text-right"><div class="flex items-center justify-end gap-3"><button v-if="!userDoc.isApproved" @click="approveUser(userDoc.id)" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-green-700 tracking-widest">APPROVE</button><template v-if="userDoc.email !== user.email"><button v-if="confirmDeleteMember !== userDoc.id" @click="confirmDeleteMember = userDoc.id" class="text-slate-300 hover:text-red-500 text-[10px] font-bold uppercase tracking-widest text-xs">REMOVE</button><div v-else class="flex items-center gap-1.5"><button @click="deleteMember(userDoc.id)" class="bg-red-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase">Confirm</button><button @click="confirmDeleteMember = null" class="text-slate-400 text-[10px] font-bold uppercase">X</button></div></template></div></td></tr></tbody>
+                        </table>
+                    </div>
+                    <div class="md:hidden space-y-3">
+                        <div v-for="userDoc in allUsers" :key="userDoc.id" class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                            <div class="flex justify-between items-start mb-4"><div><div class="font-bold text-slate-800 text-base leading-tight tracking-tight">{{ userDoc.name }}</div><div class="text-[11px] text-blue-600 font-bold uppercase mt-1">{{ userDoc.businessName }}</div></div><span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase border bg-slate-50 text-slate-500 border-slate-100 tracking-widest">{{ userDoc.role }}</span></div>
+                            <div class="flex items-center justify-between pt-4 border-t border-slate-50 gap-2"><div v-if="userDoc.isApproved" class="text-green-600 text-[9px] font-black uppercase tracking-widest">VERIFIED</div><div v-else class="text-amber-500 text-[9px] font-black uppercase tracking-widest">PENDING</div><div class="flex items-center gap-2"><button v-if="!userDoc.isApproved" @click="approveUser(userDoc.id)" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase">Approve</button><template v-if="userDoc.email !== user.email"><button v-if="confirmDeleteMember !== userDoc.id" @click="confirmDeleteMember = userDoc.id" class="text-slate-300 text-[9px] font-black uppercase">Remove</button><div v-else class="flex items-center gap-1.5"><button @click="deleteMember(userDoc.id)" class="bg-red-600 text-white px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase">DELETE</button><button @click="confirmDeleteMember = null" class="text-slate-400 px-2.5 py-1.5 rounded-lg text-[10px] font-bold">X</button></div></template></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <!-- MODALS -->
+    <div v-if="Object.values(modals).some(v => v)" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50 overflow-y-auto backdrop-blur-sm">
+        <div v-if="modals.discussion" class="bg-white rounded-3xl p-8 w-full max-w-xl shadow-2xl relative border border-slate-200"><h2 class="font-bold text-2xl mb-1 text-slate-800 tracking-tight uppercase">New Post</h2><p class="text-xs text-slate-400 mb-8 font-bold uppercase tracking-widest">Community feed</p><div class="space-y-4"><input v-model="form.disc_title" placeholder="Topic heading" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold shadow-inner"><textarea v-model="form.disc_body" placeholder="Describe the topic..." class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-40 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium shadow-inner"></textarea><div class="flex gap-3 pt-4"><button @click="modals.discussion = false" class="flex-1 bg-slate-100 py-4 rounded-2xl font-bold text-sm text-slate-500 uppercase tracking-widest">Cancel</button><button @click="createDiscussion" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold text-sm btn-shadow uppercase tracking-widest">Post Thread</button></div></div></div>
+        <div v-if="modals.resource" class="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100"><h2 class="font-bold text-2xl mb-8 text-slate-800 tracking-tight uppercase">Add Document</h2><div class="space-y-4"><input v-model="form.res_title" placeholder="File title" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold shadow-inner"><input v-model="form.res_url" placeholder="Public link URL" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold shadow-inner"><select v-model="form.res_cat" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold uppercase tracking-widest"><option value="legal">⚖️ Legal & Lease</option><option value="guidelines">📜 Rules & Guidelines</option><option value="maintenance">🔧 Maintenance Info</option></select><div class="flex gap-3 pt-6"><button @click="modals.resource = false" class="flex-1 bg-slate-100 py-4 rounded-2xl font-bold text-sm text-slate-500 uppercase tracking-widest">Cancel</button><button @click="createResource" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold text-sm btn-shadow uppercase tracking-widest">Save Doc</button></div></div></div>
+        <div v-if="modals.poll" class="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-100"><h2 class="font-bold text-2xl mb-8 text-slate-800 tracking-tight uppercase text-center">New Poll</h2><div class="space-y-4"><input v-model="form.poll_q" placeholder="The question" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold shadow-inner"><div v-for="(opt, idx) in form.poll_options" :key="idx" class="flex gap-2"><input v-model="form.poll_options[idx]" :placeholder="'Option ' + (idx+1)" class="flex-1 p-3 border border-slate-100 rounded-xl text-xs font-bold bg-white shadow-sm"><button @click="removePollOption(idx)" v-if="form.poll_options.length > 2" class="text-red-400 px-2 font-bold text-lg">×</button></div><button @click="addPollOption" class="text-blue-600 text-[10px] font-black uppercase tracking-widest hover:underline px-1">+ Add Option</button><div class="flex gap-3 pt-4"><button @click="modals.poll = false" class="flex-1 bg-slate-100 py-4 rounded-2xl font-bold text-sm text-slate-500 uppercase tracking-widest">Cancel</button><button @click="createPoll" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold text-sm btn-shadow uppercase tracking-widest">Start Poll</button></div></div></div>
+    </div>
+</div>
+<script type="module">
+    import { createApp, ref, computed, onMounted } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js';
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, doc, setDoc, onSnapshot, query, where, updateDoc, deleteDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    const firebaseConfig = {
+        apiKey: "AIzaSyBlLljuoGdrpzuCmemwJTHoY-Qlub0BNII",
+        authDomain: "henry-s-fork-plaza.firebaseapp.com",
+        projectId: "henry-s-fork-plaza",
+        storageBucket: "henry-s-fork-plaza.firebasestorage.app",
+        messagingSenderId: "306812518312",
+        appId: "1:306812518312:web:978c5417ee6a154878679d"
+    };
+
+    const GHL_WEBHOOK_URL = "https://services.leadconnectorhq.com/hooks/UZK1Vum2FJvp2zTosCGa/webhook-trigger/547b768b-c6d0-473c-995e-6b8949c25670";
+    const STRIPE_PORTAL_URL = "https://billing.stripe.com/p/login/14AeV5eIgdCR7fa21G6EU00";
+    const STRIPE_LINKS = {
+        monthly: "https://buy.stripe.com/14AeV5eIgdCR7fa21G6EU00",
+        yearly: "https://buy.stripe.com/bJeaEP9nWaqFdDy7m06EU01",
+        monthly_shared: "https://buy.stripe.com/14A9ALas056l0QM0XC6EU02",
+        yearly_shared: "https://buy.stripe.com/eVq4grdEceGV42YeOs6EU03"
+    };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    createApp({
+        setup() {
+            const logoUrl = "https://storage.googleapis.com/msgsndr/UZK1Vum2FJvp2zTosCGa/media/698f7c2f0084985da84c8284.png";
+            const user = ref(null);
+            const userProfile = ref(null);
+            const view = ref('home');
+            const loading = ref(false);
+            const error = ref("");
+            const authMode = ref("login");
+            const authForm = ref({ email: "", password: "", name: "", business: "" });
+            const discussions = ref([]);
+            const polls = ref([]);
+            const resources = ref([]);
+            const allUsers = ref([]);
+            const modals = ref({ discussion: false, poll: false, resource: false });
+            const form = ref({ disc_title: '', disc_body: '', res_title: '', res_url: '', res_cat: 'legal', poll_q: '', poll_options: ['', ''] });
+            const activeReplies = ref(null);
+            const newReplyText = ref('');
+            const replyingTo = ref(null);
+            const confirmDeleteMember = ref(null);
+            const isDrawerOpen = ref(false);
+            const isAdmin = computed(() => userProfile.value?.role === 'admin');
+            const visibleDiscussions = computed(() => {
+                if (!user.value || !userProfile.value?.isApproved) return [];
+                return discussions.value.filter(d => d.isApproved || d.authorEmail === user.value.email);
+            });
+            const pendingDiscussions = computed(() => discussions.value.filter(d => !d.isApproved));
+            const pendingUsers = computed(() => allUsers.value.filter(u => !u.isApproved));
+            const navLinks = [
+                { label: 'Home', view: 'home', icon: 'fas fa-home' },
+                { label: 'Chat', view: 'discussions', icon: 'fas fa-comments' },
+                { label: 'Polls', view: 'polls', icon: 'fas fa-check-to-slot' },
+                { label: 'Docs', view: 'resources', icon: 'fas fa-folder-open' },
+                { label: 'Billing', view: 'billing', icon: 'fas fa-credit-card' }
+            ];
+            const allNavLinks = computed(() => navLinks);
+            const homeFeatures = [
+                { title: 'Chat', desc: 'BUSINESS NEWS & COMMUNICATION', icon: 'fas fa-comments', iconBg: 'bg-indigo-50 text-indigo-600' },
+                { title: 'Voting', desc: 'MEMBER POLLS & DECISIONS', icon: 'fas fa-check-to-slot', iconBg: 'bg-amber-50 text-amber-600' },
+                { title: 'Documentation', desc: 'OFFICIAL FORMS & GUIDELINES', icon: 'fas fa-file-invoice', iconBg: 'bg-green-50 text-green-600' },
+                { title: 'Financials', desc: 'SECURE BILLING PORTAL', icon: 'fas fa-receipt', iconBg: 'bg-blue-50 text-blue-600' }
+            ];
+            const triggerWebhook = async (payload) => {
+                if (!GHL_WEBHOOK_URL) return;
+                try {
+                    await fetch(GHL_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ source: 'HFP_PORTAL', timestamp: new Date().toISOString(), ...payload })
+                    });
+                } catch (e) { console.error("Webhook error", e); }
+            };
+            onMounted(() => {
+                onAuthStateChanged(auth, async (u) => {
+                    user.value = u;
+                    if (u) {
+                        setupSubscriptions();
+                        const normalizedEmail = u.email.toLowerCase();
+                        const userRef = doc(db, 'users', normalizedEmail);
+                        onSnapshot(userRef, (snap) => {
+                            if (snap.exists()) {
+                                userProfile.value = snap.data();
+                            } else {
+                                const profile = { email: normalizedEmail, role: 'member', isApproved: false, subscriptionStatus: 'inactive', createdAt: serverTimestamp() };
+                                setDoc(userRef, profile);
+                                userProfile.value = profile;
+                            }
+                        });
+                    }
+                });
+            });
+            function setupSubscriptions() {
+                onSnapshot(collection(db, 'discussions'), (snap) => { discussions.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); });
+                onSnapshot(collection(db, 'polls'), (snap) => polls.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                onSnapshot(collection(db, 'resources'), (snap) => resources.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                onSnapshot(collection(db, 'users'), (snap) => allUsers.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }
+            const login = async () => { loading.value = true; error.value = ""; try { await signInWithEmailAndPassword(auth, authForm.value.email.toLowerCase(), authForm.value.password); } catch (e) { error.value = "Login failed. Verify credentials."; } loading.value = false; };
+            const handleSignup = async () => { loading.value = true; error.value = ""; try { const email = authForm.value.email.toLowerCase(); const name = authForm.value.name; const business = authForm.value.business; await createUserWithEmailAndPassword(auth, email, authForm.value.password); const newProfile = { name: name, businessName: business, email: email, role: 'member', isApproved: false, subscriptionStatus: 'inactive', createdAt: serverTimestamp() }; await setDoc(doc(db, 'users', email), newProfile); triggerWebhook({ type: 'ACCOUNT_REQUEST', name: newProfile.name, business: newProfile.businessName, email: newProfile.email }); } catch (e) { error.value = e.message; } loading.value = false; };
+            const logout = () => { userProfile.value = null; signOut(auth); };
+            const approveUser = async (userId) => { const userRef = doc(db, 'users', userId); const userSnap = await getDoc(userRef); const userData = userSnap.data(); await updateDoc(userRef, { isApproved: true }); triggerWebhook({ type: 'ACCOUNT_APPROVED', email: userData.email, name: userData?.name || 'Member' }); };
+            const deleteMember = async (userId) => { if (userId === user.value.email) return; await deleteDoc(doc(db, 'users', userId)); confirmDeleteMember.value = null; };
+            const createDiscussion = async () => { const autoApprove = isAdmin.value; const newPost = { title: form.value.disc_title, content: form.value.disc_body, isApproved: autoApprove, authorEmail: user.value.email, businessName: userProfile.value.businessName, createdAt: serverTimestamp(), replies: [] }; await addDoc(collection(db, 'discussions'), newPost); if (autoApprove) { triggerWebhook({ type: 'DISCUSSION_LIVE', title: newPost.title, author: newPost.businessName }); } else { triggerWebhook({ type: 'APPROVAL_REQUIRED', title: newPost.title, author: newPost.businessName }); } modals.value.discussion = false; form.value.disc_title = ''; form.value.disc_body = ''; };
+            const approvePost = async (id) => { const post = discussions.value.find(d => d.id === id); await updateDoc(doc(db, 'discussions', id), { isApproved: true }); triggerWebhook({ type: 'DISCUSSION_LIVE', title: post.title, author: post.businessName }); };
+            const deletePost = (id) => deleteDoc(doc(db, 'discussions', id));
+            const deletePoll = (id) => deleteDoc(doc(db, 'polls', id));
+            const deleteResource = (id) => deleteDoc(doc(db, 'resources', id));
+            const submitReply = async (discId, parentReplyId = null) => { if (!newReplyText.value.trim()) return; const disc = discussions.value.find(d => d.id === discId); const replies = [...(disc.replies || [])]; const parentReply = parentReplyId ? replies.find(r => r.id === parentReplyId) : null; const newReply = { id: crypto.randomUUID(), parentId: parentReplyId, parentAuthor: parentReply ? parentReply.businessName : null, text: newReplyText.value, businessName: userProfile.value.businessName, email: user.value.email, createdAt: new Date().toISOString() }; replies.push(newReply); await updateDoc(doc(db, 'discussions', discId), { replies }); triggerWebhook({ type: 'NEW_REPLY', postTitle: disc.title, author: newReply.businessName, email: newReply.email, text: newReply.text }); newReplyText.value = ''; replyingTo.value = null; };
+            const createPoll = async () => { const opts = {}; form.value.poll_options.filter(o => o.trim()).forEach(o => opts[o] = 0); if (Object.keys(opts).length < 2) return; const pollData = { question: form.value.poll_q, options: opts, voters: {}, createdAt: serverTimestamp() }; await addDoc(collection(db, 'polls'), pollData); triggerWebhook({ type: 'POLL_LIVE', question: pollData.question }); modals.value.poll = false; form.value.poll_q = ''; form.value.poll_options = ['', '']; };
+            const vote = async (pollId, option) => { const poll = polls.value.find(p => p.id === pollId); const voters = poll.voters || {}; const oldVote = voters[user.value.email]; if (oldVote === option) return; const newOptions = { ...poll.options }; if (oldVote) newOptions[oldVote] = Math.max(0, newOptions[oldVote] - 1); newOptions[option] = (newOptions[option] || 0) + 1; const newVoters = { ...voters }; newVoters[user.value.email] = option; await updateDoc(doc(db, 'polls', pollId), { options: newOptions, voters: newVoters }); };
+            const openStripePortal = () => window.open(STRIPE_PORTAL_URL, '_blank');
+            const openStripeCheckout = (key) => { const url = `${STRIPE_LINKS[key]}?prefilled_email=${encodeURIComponent(user.value.email)}`; window.open(url, '_blank'); };
+            const hasVotedFor = (p, o) => p.voters?.[user.value?.email] === o;
+            const createResource = async () => { await addDoc(collection(db, 'resources'), { title: form.value.res_title, url: form.value.res_url, category: form.value.res_cat, createdAt: serverTimestamp() }); modals.value.resource = false; };
+            const navBtnClass = (v) => `w-full text-left p-4 rounded-2xl flex items-center transition-all gap-4 text-sm font-bold ${view.value === v ? 'tab-active shadow-sm' : 'text-slate-400 hover:bg-slate-50'}`;
+            const mobileNavClass = (v) => `mobile-nav-item ${view.value === v ? 'text-blue-600 font-bold' : 'text-slate-400 font-medium'}`;
+            const formatDate = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleDateString() : 'Just now';
+            const getPollPercentage = (poll, opt) => { const total = Object.values(poll.options).reduce((a, b) => a + b, 0); return total === 0 ? 0 : Math.round(((poll.options[opt] || 0) / total) * 100); };
+            const getCategoryEmoji = (cat) => { const map = { legal: '⚖️', guidelines: '📜', maintenance: '🔧' }; return map[cat] || '📁'; };
+            const openLink = (url) => { if (!url) return; let target = url.trim(); if (!/^https?:\/\//i.test(target)) target = 'https://' + target; window.open(target, '_blank'); };
+            const toggleReplies = (id) => { activeReplies.value = activeReplies.value === id ? null : id; replyingTo.value = null; };
+            const getThreadedReplies = (r) => { if (!r) return []; const res = []; r.filter(x => !x.parentId).forEach(parent => { res.push(parent); res.push(...r.filter(x => x.parentId === parent.id)); }); return res; };
+            const addPollOption = () => form.value.poll_options.push('');
+            const removePollOption = (i) => form.value.poll_options.splice(i, 1);
+            const setReplyTarget = (r) => { replyingTo.value = r; newReplyText.value = ''; };
+            return {
+                logoUrl, user, userProfile, view, isAdmin, loading, error, authMode, authForm, navLinks, allNavLinks, isDrawerOpen, homeFeatures, discussions, visibleDiscussions, pendingDiscussions, pendingUsers, polls, resources, allUsers, modals, form, activeReplies, newReplyText, replyingTo, confirmDeleteMember,
+                login, handleSignup, logout, approveUser, deleteMember, createDiscussion, approvePost, deletePost, deletePoll, deleteResource, createPoll, vote, createResource, submitReply, navBtnClass, mobileNavClass, formatDate, getPollPercentage, openLink, openStripePortal, openStripeCheckout, toggleReplies, getThreadedReplies, setReplyTarget, addPollOption, removePollOption, hasVotedFor, getCategoryEmoji
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
