@@ -405,7 +405,6 @@
         appId: "1:306812518312:web:978c5417ee6a154878679d"
     };
 
-    const GHL_WEBHOOK_URL = "https://services.leadconnectorhq.com/hooks/UZK1Vum2FJvp2zTosCGa/webhook-trigger/547b768b-c6d0-473c-995e-6b8949c25670";
     const STRIPE_PORTAL_URL = "https://billing.stripe.com/p/login/14AeV5eIgdCR7fa21G6EU00";
     const STRIPE_LINKS = {
         monthly: "https://buy.stripe.com/14AeV5eIgdCR7fa21G6EU00",
@@ -458,16 +457,10 @@
                 { title: 'Documentation', desc: 'OFFICIAL FORMS & GUIDELINES', icon: 'fas fa-file-invoice', iconBg: 'bg-green-50 text-green-600' },
                 { title: 'Financials', desc: 'SECURE BILLING PORTAL', icon: 'fas fa-receipt', iconBg: 'bg-blue-50 text-blue-600' }
             ];
-            const triggerWebhook = async (payload) => {
-                if (!GHL_WEBHOOK_URL) return;
-                try {
-                    await fetch(GHL_WEBHOOK_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ source: 'HFP_PORTAL', timestamp: new Date().toISOString(), ...payload })
-                    });
-                } catch (e) { console.error("Webhook error", e); }
-            };
+            // Note: notifications to the team (new signups, posts, replies, polls) and
+            // Stripe subscription-status sync now happen server-side via Firebase Cloud
+            // Functions (see /functions), triggered directly off Firestore writes and
+            // the Stripe webhook. No client-side webhook call is needed anymore.
             onMounted(() => {
                 onAuthStateChanged(auth, async (u) => {
                     user.value = u;
@@ -494,17 +487,17 @@
                 onSnapshot(collection(db, 'users'), (snap) => allUsers.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }
             const login = async () => { loading.value = true; error.value = ""; try { await signInWithEmailAndPassword(auth, authForm.value.email.toLowerCase(), authForm.value.password); } catch (e) { error.value = "Login failed. Verify credentials."; } loading.value = false; };
-            const handleSignup = async () => { loading.value = true; error.value = ""; try { const email = authForm.value.email.toLowerCase(); const name = authForm.value.name; const business = authForm.value.business; await createUserWithEmailAndPassword(auth, email, authForm.value.password); const newProfile = { name: name, businessName: business, email: email, role: 'member', isApproved: false, subscriptionStatus: 'inactive', createdAt: serverTimestamp() }; await setDoc(doc(db, 'users', email), newProfile); triggerWebhook({ type: 'ACCOUNT_REQUEST', name: newProfile.name, business: newProfile.businessName, email: newProfile.email }); } catch (e) { error.value = e.message; } loading.value = false; };
+            const handleSignup = async () => { loading.value = true; error.value = ""; try { const email = authForm.value.email.toLowerCase(); const name = authForm.value.name; const business = authForm.value.business; await createUserWithEmailAndPassword(auth, email, authForm.value.password); const newProfile = { name: name, businessName: business, email: email, role: 'member', isApproved: false, subscriptionStatus: 'inactive', createdAt: serverTimestamp() }; await setDoc(doc(db, 'users', email), newProfile); } catch (e) { error.value = e.message; } loading.value = false; };
             const logout = () => { userProfile.value = null; signOut(auth); };
-            const approveUser = async (userId) => { const userRef = doc(db, 'users', userId); const userSnap = await getDoc(userRef); const userData = userSnap.data(); await updateDoc(userRef, { isApproved: true }); triggerWebhook({ type: 'ACCOUNT_APPROVED', email: userData.email, name: userData?.name || 'Member' }); };
+            const approveUser = async (userId) => { const userRef = doc(db, 'users', userId); await updateDoc(userRef, { isApproved: true }); };
             const deleteMember = async (userId) => { if (userId === user.value.email) return; await deleteDoc(doc(db, 'users', userId)); confirmDeleteMember.value = null; };
-            const createDiscussion = async () => { const autoApprove = isAdmin.value; const newPost = { title: form.value.disc_title, content: form.value.disc_body, isApproved: autoApprove, authorEmail: user.value.email, businessName: userProfile.value.businessName, createdAt: serverTimestamp(), replies: [] }; await addDoc(collection(db, 'discussions'), newPost); if (autoApprove) { triggerWebhook({ type: 'DISCUSSION_LIVE', title: newPost.title, author: newPost.businessName }); } else { triggerWebhook({ type: 'APPROVAL_REQUIRED', title: newPost.title, author: newPost.businessName }); } modals.value.discussion = false; form.value.disc_title = ''; form.value.disc_body = ''; };
-            const approvePost = async (id) => { const post = discussions.value.find(d => d.id === id); await updateDoc(doc(db, 'discussions', id), { isApproved: true }); triggerWebhook({ type: 'DISCUSSION_LIVE', title: post.title, author: post.businessName }); };
+            const createDiscussion = async () => { const autoApprove = isAdmin.value; const newPost = { title: form.value.disc_title, content: form.value.disc_body, isApproved: autoApprove, authorEmail: user.value.email, businessName: userProfile.value.businessName, createdAt: serverTimestamp(), replies: [] }; await addDoc(collection(db, 'discussions'), newPost); modals.value.discussion = false; form.value.disc_title = ''; form.value.disc_body = ''; };
+            const approvePost = async (id) => { await updateDoc(doc(db, 'discussions', id), { isApproved: true }); };
             const deletePost = (id) => deleteDoc(doc(db, 'discussions', id));
             const deletePoll = (id) => deleteDoc(doc(db, 'polls', id));
             const deleteResource = (id) => deleteDoc(doc(db, 'resources', id));
-            const submitReply = async (discId, parentReplyId = null) => { if (!newReplyText.value.trim()) return; const disc = discussions.value.find(d => d.id === discId); const replies = [...(disc.replies || [])]; const parentReply = parentReplyId ? replies.find(r => r.id === parentReplyId) : null; const newReply = { id: crypto.randomUUID(), parentId: parentReplyId, parentAuthor: parentReply ? parentReply.businessName : null, text: newReplyText.value, businessName: userProfile.value.businessName, email: user.value.email, createdAt: new Date().toISOString() }; replies.push(newReply); await updateDoc(doc(db, 'discussions', discId), { replies }); triggerWebhook({ type: 'NEW_REPLY', postTitle: disc.title, author: newReply.businessName, email: newReply.email, text: newReply.text }); newReplyText.value = ''; replyingTo.value = null; };
-            const createPoll = async () => { const opts = {}; form.value.poll_options.filter(o => o.trim()).forEach(o => opts[o] = 0); if (Object.keys(opts).length < 2) return; const pollData = { question: form.value.poll_q, options: opts, voters: {}, createdAt: serverTimestamp() }; await addDoc(collection(db, 'polls'), pollData); triggerWebhook({ type: 'POLL_LIVE', question: pollData.question }); modals.value.poll = false; form.value.poll_q = ''; form.value.poll_options = ['', '']; };
+            const submitReply = async (discId, parentReplyId = null) => { if (!newReplyText.value.trim()) return; const disc = discussions.value.find(d => d.id === discId); const replies = [...(disc.replies || [])]; const parentReply = parentReplyId ? replies.find(r => r.id === parentReplyId) : null; const newReply = { id: crypto.randomUUID(), parentId: parentReplyId, parentAuthor: parentReply ? parentReply.businessName : null, text: newReplyText.value, businessName: userProfile.value.businessName, email: user.value.email, createdAt: new Date().toISOString() }; replies.push(newReply); await updateDoc(doc(db, 'discussions', discId), { replies }); newReplyText.value = ''; replyingTo.value = null; };
+            const createPoll = async () => { const opts = {}; form.value.poll_options.filter(o => o.trim()).forEach(o => opts[o] = 0); if (Object.keys(opts).length < 2) return; const pollData = { question: form.value.poll_q, options: opts, voters: {}, createdAt: serverTimestamp() }; await addDoc(collection(db, 'polls'), pollData); modals.value.poll = false; form.value.poll_q = ''; form.value.poll_options = ['', '']; };
             const vote = async (pollId, option) => { const poll = polls.value.find(p => p.id === pollId); const voters = poll.voters || {}; const oldVote = voters[user.value.email]; if (oldVote === option) return; const newOptions = { ...poll.options }; if (oldVote) newOptions[oldVote] = Math.max(0, newOptions[oldVote] - 1); newOptions[option] = (newOptions[option] || 0) + 1; const newVoters = { ...voters }; newVoters[user.value.email] = option; await updateDoc(doc(db, 'polls', pollId), { options: newOptions, voters: newVoters }); };
             const openStripePortal = () => window.open(STRIPE_PORTAL_URL, '_blank');
             const openStripeCheckout = (key) => { const url = `${STRIPE_LINKS[key]}?prefilled_email=${encodeURIComponent(user.value.email)}`; window.open(url, '_blank'); };
